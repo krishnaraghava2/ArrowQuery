@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>1.0.5</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="runtimes\win-x64\native\arrow_query.dll">
+      <Pack>true</Pack>
+      <PackagePath>runtimes/win-x64/native/</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

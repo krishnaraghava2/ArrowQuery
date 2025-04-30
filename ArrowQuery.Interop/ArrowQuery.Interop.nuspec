@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>ArrowQuery.Interop</id>
+    <version>1.0.5</version>
+    <authors>YourName</authors>
+    <owners>YourName</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>ArrowTable .NET interop with Rust Arrow FFI</description>
+    <dependencies>
+      <group targetFramework=".NETCoreApp8.0" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="bin\Release\net8.0\ArrowQuery.Interop.dll" target="lib\net8.0\" />
+    <file src="bin\Release\net8.0\ArrowQuery.Interop.pdb" target="lib\net8.0\" />
+    <file src="bin\Release\net8.0\runtimes\win-x64\native\arrow_query.dll" target="runtimes\win-x64\native\" />
+  </files>
+</package>
