@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Apache.Arrow;
 using Apache.Arrow.Ipc;
 using ArrowQuery.Interop;
+using Apache.Arrow.Types;
 
 class Program
 {
@@ -15,39 +16,41 @@ class Program
 
         var fields = new List<Field>
         {
-            new Field("id", ArrowType.Int32, false),
-            new Field("name", ArrowType.Utf8, false)
+            new Field("id", Int32Type.Default, false),
+            new Field("name", StringType.Default, false)
         };
-        var schema = new Schema.Builder().Fields(fields).Build();
+        var schema = new Schema(fields, new Dictionary<string, string>());
 
         var recordBatch = new RecordBatch.Builder()
-            .Append("id", idArray)
-            .Append("name", nameArray)
+            .Append("id", true, idArray)
+            .Append("name", true, nameArray)
             .Build();
+
+        Apache.Arrow.Compression.CompressionCodecFactory factory = new Apache.Arrow.Compression.CompressionCodecFactory();
+
+        var options = new IpcOptions
+        {
+            CompressionCodec = CompressionCodecType.Zstd,
+            CompressionLevel = 3,
+            CompressionCodecFactory = factory,
+        };
 
         // Serialize to Arrow IPC bytes
         byte[] arrowBytes;
         using (var ms = new MemoryStream())
-        using (var writer = new ArrowStreamWriter(ms, schema))
+        using (var writer = new ArrowStreamWriter(ms, schema, false, options))
         {
             writer.WriteRecordBatchAsync(recordBatch).GetAwaiter().GetResult();
             writer.WriteEndAsync().GetAwaiter().GetResult();
             arrowBytes = ms.ToArray();
         }
 
-        // Create ArrowTable
-        var tablePtr = ArrowTableInterop.CreateArrowTable(arrowBytes);
-
-        // Example SQL query
-        string sql = "SELECT * FROM batch WHERE id > 1";
-
-        // Run query and get JSON result
-        string json = ArrowTableInterop.Query(tablePtr, sql);
-
-        Console.WriteLine("Query Result (JSON):");
-        Console.WriteLine(json);
-
-        // Free ArrowTable
-        ArrowTableInterop.arrow_table_free(tablePtr);
+        using (ArrowQuery.Interop.ArrowTable arrowTable = new ArrowTable(arrowBytes))
+        {
+            string sql = "SELECT * FROM batch WHERE id > 1";
+            var json = arrowTable.Query(sql);
+            Console.WriteLine("Query Result (JSON):");
+            Console.WriteLine(json);
+        }
     }
 }

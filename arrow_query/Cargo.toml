@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 ahash = { version = "0.8", default-features = false, features = ["runtime-rng"] }
 arrow = { version = "54.2.1", features = ["ipc", "prettyprint"] }                                       # data-fusion 46.0.1 depens on arrow 54.2.1
+arrow-ipc = { version = "54.2.1", features = ["zstd"] }
 arrow-array = { version = "54.2.1", default-features = false, features = ["chrono-tz"] }
 arrow-buffer = { version = "54.2.1", default-features = false }
 arrow-cast = { version = "54.2.1", default-features = false }

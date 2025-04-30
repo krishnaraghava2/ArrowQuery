@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ArrowQuery.Interop" Version="1.0.3" />
+    <PackageReference Include="Apache.Arrow" Version="20.0.0" />
+    <PackageReference Include="Apache.Arrow.Compression" Version="20.0.0" />
+    <PackageReference Include="ArrowQuery.Interop" Version="1.0.7" />
   </ItemGroup>
 
 </Project>

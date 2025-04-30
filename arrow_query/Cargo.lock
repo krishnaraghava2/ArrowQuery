@@ -262,6 +262,7 @@ dependencies = [
  "arrow-schema",
  "flatbuffers",
  "lz4_flex",
+ "zstd",
 ]
 
 [[package]]
@@ -361,6 +362,7 @@ dependencies = [
  "arrow-array",
  "arrow-buffer",
  "arrow-cast",
+ "arrow-ipc",
  "arrow-json",
  "arrow-ord",
  "arrow-schema",
