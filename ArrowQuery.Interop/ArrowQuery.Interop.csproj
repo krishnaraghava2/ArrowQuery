@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Version>1.0.5</Version>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>ArrowQuery.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>
