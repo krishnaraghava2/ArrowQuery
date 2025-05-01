@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace ArrowQuery.Interop
 {
-    public static class ArrowQueryInterop
+    internal static class ArrowQueryInterop
     {
         private const string DllName = "arrow_query"; // arrow_query.dll must be in output dir
 

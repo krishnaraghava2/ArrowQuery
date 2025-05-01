@@ -2,11 +2,11 @@
 <package >
   <metadata>
     <id>ArrowQuery.Interop</id>
-    <version>1.0.7</version>
-    <authors>YourName</authors>
-    <owners>YourName</owners>
+    <version>1.0.8</version>
+    <authors>KRaghav</authors>
+    <owners>KRaghav</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <description>ArrowTable .NET interop with Rust Arrow FFI</description>
+    <description>Query Arrow Table .NET interop with Data Fusion</description>
     <dependencies>
       <group targetFramework=".NETCoreApp8.0" />
     </dependencies>
