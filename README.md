@@ -104,6 +104,11 @@ class Program
     }
 }
 ```
+## Note
+
+Note: The Table name will always be 'batch' and column names are always converted to lower case by DataFusion. If you have Uppercase then use column names quoted like :
+
+SELECT "ExampleColumn" FROM batch
 
 ## License
 
