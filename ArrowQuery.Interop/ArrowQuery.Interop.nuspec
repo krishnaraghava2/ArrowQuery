@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>ArrowQuery.Interop</id>
-    <version>1.0.8</version>
+    <version>1.0.9</version>
     <authors>KRaghav</authors>
     <owners>KRaghav</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>

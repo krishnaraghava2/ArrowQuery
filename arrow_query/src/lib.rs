@@ -1,56 +1,96 @@
-use datafusion::datasource::MemTable;
-use arrow::ipc::reader::StreamReader;
-use arrow::record_batch::RecordBatch;
-use datafusion::prelude::*;
-use std::sync::Arc;
-use std::io::Cursor;
+// Add module declarations
+mod arrow_table;
+mod arrow_database;
 
-pub struct ArrowTable {
-    record_batch: RecordBatch,
-}
+// Import the necessary types from those modules
+use arrow_database::ArrowDatabase;
 
 // FFI INTEROP SECTION
 
-#[no_mangle]
-pub extern "C" fn arrow_table_new(ptr: *const u8, len: usize) -> *mut ArrowTable {
-    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
-    let table = ArrowTable::new(bytes);
-    Box::into_raw(Box::new(table))
+#[unsafe(no_mangle)]
+pub extern "C" fn arrow_database_new() -> *mut ArrowDatabase {
+    let database = ArrowDatabase::new();
+    Box::into_raw(Box::new(database))
 }
 
-#[no_mangle]
-pub extern "C" fn arrow_table_free(table: *mut ArrowTable) {
-    if !table.is_null() {
-        unsafe { Box::from_raw(table); }
+#[unsafe(no_mangle)]
+pub extern "C" fn arrow_database_free(database: *mut ArrowDatabase) {
+    if !database.is_null() {
+        unsafe {
+            let _ = Box::from_raw(database);
+        }
     }
 }
 
-// Async FFI is tricky; provide a sync wrapper for simple queries
-#[no_mangle]
-pub extern "C" fn arrow_table_query(
-    table: *mut ArrowTable,
+#[unsafe(no_mangle)]
+pub extern "C" fn arrow_database_add_table(
+    database: *mut ArrowDatabase,
+    data_ptr: *const u8,
+    data_len: usize,
+    table_name_ptr: *const u8,
+    table_name_len: usize
+) -> i32 {
+    if database.is_null() {
+        return -1;
+    }
+
+    let database = unsafe { &mut *database };
+    let bytes = unsafe { std::slice::from_raw_parts(data_ptr, data_len) };
+    let table_name = match unsafe { std::str::from_utf8(std::slice::from_raw_parts(table_name_ptr, table_name_len)) } {
+        Ok(name) => name,
+        Err(_) => return -2,
+    };
+
+    database.add_table(bytes, table_name);
+    0 // success
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn arrow_database_query(
+    database: *mut ArrowDatabase,
     sql_ptr: *const u8,
     sql_len: usize,
     out_buf_ptr: *mut *mut u8,
     out_buf_len: *mut usize,
+    error_buf_ptr: *mut *mut u8,
+    error_buf_len: *mut usize,
 ) -> i32 {
-    let table = unsafe {
-        assert!(!table.is_null());
-        &*table
+    if database.is_null() {
+        return -1;
+    }
+
+    let database = unsafe { &mut *database };
+    let sql = match unsafe { std::str::from_utf8(std::slice::from_raw_parts(sql_ptr, sql_len)) } {
+        Ok(sql) => sql,
+        Err(_) => return -2,
     };
-    let sql = unsafe { std::str::from_utf8_unchecked(std::slice::from_raw_parts(sql_ptr, sql_len)) };
 
     // Use a tokio runtime for async
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
-        Err(_) => return -2,
-    };
-
-    let result = rt.block_on(table.query(sql));
-    let json = match result {
-        Ok(s) => s,
         Err(_) => return -3,
     };
+
+    let result = rt.block_on(database.query(sql));
+    let json = match result {
+        Ok(s) => s,
+        Err(e) => {
+            let error = e.to_string();
+            if !error.is_empty() {
+                let error_buffer = error.into_bytes();
+                let error_out = error_buffer.into_boxed_slice();
+                let error_out_len = error_out.len();
+                let error_out_ptr = Box::into_raw(error_out) as *mut u8;
+
+                unsafe {
+                    *error_buf_ptr = error_out_ptr;
+                    *error_buf_len = error_out_len;
+                }
+            }
+            return -4
+        }
+    };    
+
     let buffer = json.into_bytes();
 
     // Allocate buffer for C#
@@ -65,92 +105,11 @@ pub extern "C" fn arrow_table_query(
     0 // success
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn arrow_free_buffer(ptr: *mut u8, len: usize) {
     if !ptr.is_null() && len > 0 {
         unsafe {
             let _ = Box::from_raw(std::slice::from_raw_parts_mut(ptr, len) as *mut [u8]);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use arrow::array::{Int32Array, StringArray, ArrayRef};
-    use arrow::datatypes::{Field, DataType, Schema};
-    use arrow::ipc::writer::StreamWriter;
-    use std::io::Cursor;
-
-    #[tokio::test]
-    async fn test_arrow_query() {
-        // Create a RecordBatch
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int32, false),
-            Field::new("name", DataType::Utf8, false),
-        ]));
-        let id_array = Arc::new(Int32Array::from(vec![1, 2, 3])) as ArrayRef;
-        let name_array = Arc::new(StringArray::from(vec!["Alice", "Bob", "Carol"])) as ArrayRef;
-        let batch = RecordBatch::try_new(schema.clone(), vec![id_array, name_array]).unwrap();
-
-        // Serialize to bytes
-        let mut buffer = Vec::new();
-        {
-            let mut writer = StreamWriter::try_new(&mut buffer, &schema).unwrap();
-            writer.write(&batch).unwrap();
-            writer.finish().unwrap();
-        }
-
-        // Construct ArrowTable from bytes
-        let aq = ArrowTable::new(&buffer);
-
-        // Query
-        let sql = "SELECT id, name FROM batch WHERE id > 1";
-        let result_json = aq.query(sql).await.unwrap();
-
-        // Parse and check JSON results
-        let json_value: serde_json::Value = serde_json::from_str(&result_json).unwrap();
-        assert!(json_value.is_array());
-        let rows = json_value.as_array().unwrap();
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0]["id"].as_i64().unwrap(), 2);
-        assert_eq!(rows[1]["id"].as_i64().unwrap(), 3);
-        assert_eq!(rows[0]["name"].as_str().unwrap(), "Bob");
-        assert_eq!(rows[1]["name"].as_str().unwrap(), "Carol");
-    }
-}
-
-impl ArrowTable {
-    /// Constructs ArrowTable from a byte slice containing Arrow IPC stream data.
-    pub fn new(bytes: &[u8]) -> Self {
-        let cursor = Cursor::new(bytes);
-        let mut reader = StreamReader::try_new(cursor, None).expect("Failed to create StreamReader");
-        let record_batch = reader.next().expect("No RecordBatch found").expect("Failed to read RecordBatch");
-        ArrowTable { record_batch }
-    }
-
-    /// Executes a SQL query against the RecordBatch using DataFusion.
-    pub async fn query(&self, sql: &str) -> datafusion::error::Result<String> {
-        let schema = Arc::new(self.record_batch.schema().as_ref().clone());
-        let ctx = SessionContext::new();
-        let mem_table = MemTable::try_new(schema, vec![vec![self.record_batch.clone()]])?;
-        ctx.register_table("batch", Arc::new(mem_table))?;
-        let df = ctx.sql(sql).await?;
-        let results = df.collect().await?;
-
-        // Convert results to JSON array string
-        let schema = results.get(0).map(|b| b.schema()).unwrap_or_else(|| self.record_batch.schema());
-        let mut buf = Vec::new();
-        let mut writer = arrow::json::writer::LineDelimitedWriter::new(&mut buf);
-        for batch in &results {
-            writer.write(batch).map_err(|e| datafusion::error::DataFusionError::External(Box::new(e)))?;
-        }
-        writer.finish().map_err(|e| datafusion::error::DataFusionError::External(Box::new(e)))?;
-        let json_lines = String::from_utf8(buf).map_err(|e| datafusion::error::DataFusionError::External(Box::new(e)))?;
-        let json_array: Vec<serde_json::Value> = json_lines
-            .lines()
-            .filter_map(|line| serde_json::from_str(line).ok())
-            .collect();
-        Ok(serde_json::to_string_pretty(&json_array).unwrap_or_else(|_| "[]".to_string()))
     }
 }

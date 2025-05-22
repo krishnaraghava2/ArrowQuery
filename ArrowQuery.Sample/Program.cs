@@ -45,10 +45,11 @@ class Program
             arrowBytes = ms.ToArray();
         }
 
-        using (ArrowQuery.Interop.ArrowTable arrowTable = new ArrowTable(arrowBytes))
+        using (ArrowQuery.Interop.ArrowDatabase arrowDb = new ArrowDatabase())
         {
+            arrowDb.AddTable(arrowBytes, "batch");
             string sql = "SELECT * FROM batch WHERE id > 1";
-            var json = arrowTable.Query(sql);
+            var json = arrowDb.Query(sql);
             Console.WriteLine("Query Result (JSON):");
             Console.WriteLine(json);
         }
