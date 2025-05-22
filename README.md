@@ -63,46 +63,84 @@ using System.Collections.Generic;
 using Apache.Arrow;
 using Apache.Arrow.Ipc;
 using ArrowQuery.Interop;
+using Apache.Arrow.Types;
 
 class Program
 {
     static void Main(string[] args)
     {
-        // Build Arrow data
+        // Create sample Arrow data in memory
         var idArray = new Int32Array.Builder().Append(1).Append(2).Append(3).Build();
         var nameArray = new StringArray.Builder().Append("Alice").Append("Bob").Append("Carol").Build();
+        var cityArray = new StringArray.Builder().Append("New York").Append("Los Angeles").Append("Chicago").Build();
 
-        var fields = new List<Field>
+        var fields1 = new List<Field>
         {
             new Field("id", Int32Type.Default, false),
             new Field("name", StringType.Default, false)
         };
-        var schema = new Schema(fields, new Dictionary<string, string>());
 
-        var recordBatch = new RecordBatch.Builder()
+
+        var fields2 = new List<Field>
+        {
+            new Field("id", Int32Type.Default, false),
+            new Field("city", StringType.Default, false)
+        };
+
+        var schema1 = new Schema(fields1, new Dictionary<string, string>());
+
+        var schema2 = new Schema(fields2, new Dictionary<string, string>());
+
+        var recordBatch1 = new RecordBatch.Builder()
             .Append("id", true, idArray)
             .Append("name", true, nameArray)
             .Build();
 
-        // Serialize to Arrow IPC bytes
-        byte[] arrowBytes;
-        using (var ms = new MemoryStream())
-        using (var writer = new ArrowStreamWriter(ms, schema))
+        var recordBatch2 = new RecordBatch.Builder()
+            .Append("id", true, idArray)
+            .Append("city", true, cityArray)
+            .Build();
+
+        Apache.Arrow.Compression.CompressionCodecFactory factory = new Apache.Arrow.Compression.CompressionCodecFactory();
+
+        var options = new IpcOptions
         {
-            writer.WriteRecordBatchAsync(recordBatch).GetAwaiter().GetResult();
+            CompressionCodec = CompressionCodecType.Zstd,
+            CompressionLevel = 3,
+            CompressionCodecFactory = factory,
+        };
+
+        // Serialize to Arrow IPC bytes
+        byte[] arrowBytes1;
+        using (var ms = new MemoryStream())
+        using (var writer = new ArrowStreamWriter(ms, schema1, false, options))
+        {
+            writer.WriteRecordBatchAsync(recordBatch1).GetAwaiter().GetResult();
             writer.WriteEndAsync().GetAwaiter().GetResult();
-            arrowBytes = ms.ToArray();
+            arrowBytes1 = ms.ToArray();
         }
 
-        // Query using ArrowTable interop
-        using (ArrowTable arrowTable = new ArrowTable(arrowBytes))
+        byte[] arrowBytes2;
+        using (var ms = new MemoryStream())
+        using (var writer = new ArrowStreamWriter(ms, schema2, false, options))
         {
-            string sql = "SELECT * FROM batch WHERE id > 1";
-            var json = arrowTable.Query(sql);
+            writer.WriteRecordBatchAsync(recordBatch2).GetAwaiter().GetResult();
+            writer.WriteEndAsync().GetAwaiter().GetResult();
+            arrowBytes2 = ms.ToArray();
+        }
+
+        using (ArrowQuery.Interop.ArrowDatabase arrowDb = new ArrowDatabase())
+        {
+            arrowDb.AddTable(arrowBytes1, "batch1");
+            arrowDb.AddTable(arrowBytes2, "batch2");
+            string sql = "SELECT b1.*, b2.* FROM batch1 b1 join batch2 b2 ON b1.id=b2.id";
+            var json = arrowDb.Query(sql);
+            Console.WriteLine("Query Result (JSON):");
             Console.WriteLine(json);
         }
     }
 }
+
 ```
 ## Note
 
